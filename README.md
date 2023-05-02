@@ -32,6 +32,7 @@ for insertion into InfluxDB. After that the information can be visualised in ex.
 * Download GeoIP Databases from [@MaxMind](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and put them in db/:
     * GeoLite2-Country.mmdb
     * GeoLite2-City.mmdb
+* Prepare destination database in InfluxDB:  ```CREATE DATABASE "netflowDB" WITH DURATION 14d REPLICATION 1 SHARD DURATION 1h NAME "nfc"```
 
 ### Executing program
 * Run the script:

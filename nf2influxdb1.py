@@ -2,6 +2,7 @@
 import netflow
 import socket
 import struct
+from datetime import datetime
 import pathlib
 import influxdb
 import geoip2.database
@@ -255,8 +256,9 @@ def get_country_name(ip_address: str, reader: geoip2.database.Reader) -> str:
     try:
         response = reader.country(ip_address)
         country_name = response.country.name
-    except:
-        country_name = None
+    except Exception as typeErrorObject:
+        print(f"{datetime.now()}: nf2InfluxDB1: Warning geoip2.database.Reader:{typeErrorObject}")
+        country_name = ''
     return country_name
 
 
@@ -265,27 +267,61 @@ def get_city_name(ip_address: str, reader: geoip2.database.Reader) -> str:
     try:
         response = reader.city(ip_address)
         city_name = response.city.name
-    except:
-        city_name = None
+    except TypeError as typeErrorObject:
+        print(f"{datetime.now()}: nf2InfluxDB1: Warning geoip2.database.Reader:{typeErrorObject}")
+        city_name = ''
     return city_name
 
 
 # Main function code
 def main():
+    clientInfluxDB = None
+    readerCountry = None
+    readerCity = None
+    sock = None
     try:
         # Open listen socket
+        print(f"{datetime.now()}: nf2InfluxDB1: program started.")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((nfListenIP, nfListenPort))
+        print(f"{datetime.now()}: nf2InfluxDB1: listening for netflow data on {nfListenIP}:{nfListenPort}.")
 
         # Set up InfluxDB client
         clientInfluxDB = influxdb.InfluxDBClient(host=influxSendIP, port=influxSendPort, username=influxSendUsername,
                                                  password=influxSendPassword, database=influxSendDb)
+        '''
+        try:
+            clientInfluxDB.ping()
+            print(
+                f"{datetime.now()}: nf2InfluxDB1: connection success to InfluxDB server {influxSendIP}:{influxSendPort}/{influxSendDb} .")
+        except Exception as ConnectionRefusedErrorObj:
+            print(
+                f"{datetime.now()}: nf2InfluxDB1: Error - critical, InfluxDBClientError, connection failure to InfluxDB server {influxSendIP}:{influxSendPort}/{influxSendDb}, msg: {ConnectionRefusedErrorObj}!")
+            exit(2)
+        '''
 
-        # GeoIpReader
-        readerCountry = geoip2.database.Reader(str(fileLocation) + '/db/GeoLite2-Country.mmdb')
-        readerCity = geoip2.database.Reader(str(fileLocation) + '/db/GeoLite2-City.mmdb')
+        # GeoIpReader Country loading
+        try:
+            readerCountry = geoip2.database.Reader(str(fileLocation) + '/db/GeoLite2-Country.mmdb')
+            print(f"{datetime.now()}: nf2InfluxDB1: loaded GeoLite2-Country.mmdb.")
+        except FileNotFoundError as readerCountryException:
+            print(
+                f"{datetime.now()}: nf2InfluxDB1: Error - critical on GeoLite2-Country.mmdb, msg{readerCountryException}")
+            readerCountry = None
+            exit(3)
 
-        # Continiues serving
+        # GeoIpReader City loading
+        try:
+            readerCity = geoip2.database.Reader(str(fileLocation) + '/db/GeoLite2-City.mmdb')
+            print(f"{datetime.now()}: nf2InfluxDB1: loaded GeoLite2-City.mmdb.")
+        except FileNotFoundError as readerCityException:
+            print(f"{datetime.now()}: nf2InfluxDB1: Error - critical on GeoLite2-City.mmdb, msg{readerCityException}")
+            readerCity = None
+            exit(4)
+
+        print(f"{datetime.now()}: nf2InfluxDB1: data serving  loop initiated.")
+
+        # Continiues serving loop
         while True:
             payload, clientCon = sock.recvfrom(4096)
             clientConIP = clientCon[0]
@@ -323,32 +359,33 @@ def main():
                         'Version': netFlowVersion
                     }
                 }
+                points.append(point)
 
                 # For debug only
                 '''
-                print(int_to_ip(flow.IPV4_SRC_ADDR))
-                print('----------------------')
-                print(point)
+                print(f"{datetime.now()}: nf2InfluxDB1: {int_to_ip(flow.IPV4_SRC_ADDR)}")
+                print(f"{datetime.now()}: nf2InfluxDB1: ----------------------")
+                print(f"{datetime.now()}: nf2InfluxDB1: {point}")
                 '''
-
-                points.append(point)
 
             # Commit points into InfluxDB
             try:
                 clientInfluxDB.write_points(points)
             except influxdb.exceptions.InfluxDBServerError as ExceptInfluxDBServerError:
-                print('Error, InfluxDBServerError: %s', ExceptInfluxDBServerError)
+                print(
+                    f"{datetime.now()}: nf2InfluxDB1: Error - not critical if not permanent, InfluxDBServerError:{ExceptInfluxDBServerError}")
             except influxdb.exceptions.InfluxDBClientError as ExceptInfluxDBClientError:
-                print('Error, InfluxDBClientError: %s', ExceptInfluxDBClientError)
+                print(
+                    f"{datetime.now()}: nf2InfluxDB1: Error - critical, InfluxDBClientError:{ExceptInfluxDBClientError}, execution terminated.")
                 exit(1)
 
     # Closing everything in the end
     finally:
-        clientInfluxDB.close()
-        readerCountry.close()
-        readerCity.close()
-        sock.close()
-        print('Program execution ended.')
+        if clientInfluxDB is not None: clientInfluxDB.close()
+        if readerCountry is not None: readerCountry.close()
+        if readerCity is not None: readerCity.close()
+        if sock is not None: sock.close()
+        print(f"{datetime.now()}: nf2InfluxDB1: Program execution ended.")
 
 
 # Code execution
