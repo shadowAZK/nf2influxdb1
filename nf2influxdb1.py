@@ -6,6 +6,7 @@ from datetime import datetime
 import pathlib
 import influxdb
 import geoip2.database
+import geoip2.errors
 
 # Parameters for customisation
 nfListenIP = '0.0.0.0'
@@ -256,8 +257,13 @@ def get_country_name(ip_address: str, reader: geoip2.database.Reader) -> str:
     try:
         response = reader.country(ip_address)
         country_name = response.country.name
-    except Exception as typeErrorObject:
-        print(f"{datetime.now()}: nf2InfluxDB1: Warning geoip2.database.Reader:{typeErrorObject}")
+    except TypeError as errorObject:
+        print(f"{datetime.now()}: nf2InfluxDB1: Warning geoip2.database.Reader:{errorObject}")
+        country_name = ''
+    except geoip2.errors.AddressNotFoundError:
+        country_name = ''
+    except Exception as errorObject:
+        print(f"{datetime.now()}: nf2InfluxDB1: Error geoip2.database.Reader:{errorObject}")
         country_name = ''
     return country_name
 
@@ -267,8 +273,13 @@ def get_city_name(ip_address: str, reader: geoip2.database.Reader) -> str:
     try:
         response = reader.city(ip_address)
         city_name = response.city.name
-    except TypeError as typeErrorObject:
-        print(f"{datetime.now()}: nf2InfluxDB1: Warning geoip2.database.Reader:{typeErrorObject}")
+    except TypeError as errorObject:
+        print(f"{datetime.now()}: nf2InfluxDB1: Warning geoip2.database.Reader:{errorObject}")
+        city_name = ''
+    except geoip2.errors.AddressNotFoundError:
+        city_name = ''
+    except Exception as errorObject:
+        print(f"{datetime.now()}: nf2InfluxDB1: Error geoip2.database.Reader:{errorObject}")
         city_name = ''
     return city_name
 
