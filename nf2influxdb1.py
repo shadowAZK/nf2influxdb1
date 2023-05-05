@@ -17,6 +17,7 @@ influxSendUsername = ''
 influxSendPassword = ''
 influxSendDb = 'netflowDB'
 influxSendMeasurement = 'sum_proto'
+influxSendMinimalPackageSize = 1024
 
 # Program constants
 netFlowVersion = 'Netflow-V5'
@@ -379,23 +380,35 @@ def main():
                 print(f"{datetime.now()}: nf2InfluxDB1: {point}")
                 '''
 
-            # Commit points into InfluxDB
-            try:
-                clientInfluxDB.write_points(points)
-            except influxdb.exceptions.InfluxDBServerError as ExceptInfluxDBServerError:
-                print(
-                    f"{datetime.now()}: nf2InfluxDB1: Error - not critical if not permanent, InfluxDBServerError:{ExceptInfluxDBServerError}")
-            except influxdb.exceptions.InfluxDBClientError as ExceptInfluxDBClientError:
-                print(
-                    f"{datetime.now()}: nf2InfluxDB1: Error - critical, InfluxDBClientError:{ExceptInfluxDBClientError}, execution terminated.")
-                exit(1)
+            # Testing is package of points of the minimal defined size for commit to DB
+            if len(points) > influxSendMinimalPackageSize:
+                print(f"{datetime.now()}: nf2InfluxDB1: InfluxWrite:Start:{len(points)}")
+
+                # Commit points into InfluxDB
+                try:
+                    clientInfluxDB.write_points(points)
+                except influxdb.exceptions.InfluxDBServerError as ExceptInfluxDBServerError:
+                    print(
+                        f"{datetime.now()}: nf2InfluxDB1: Error - not critical if not permanent, InfluxDBServerError:{ExceptInfluxDBServerError}")
+                except influxdb.exceptions.InfluxDBClientError as ExceptInfluxDBClientError:
+                    print(
+                        f"{datetime.now()}: nf2InfluxDB1: Error - critical, InfluxDBClientError:{ExceptInfluxDBClientError}, execution terminated.")
+                    exit(1)
+                print(f"{datetime.now()}: nf2InfluxDB1: InfluxWrite:Done:{len(points)}")
+
+                # Clears points after commit
+                points.clear()
 
     # Closing everything in the end
     finally:
-        if clientInfluxDB is not None: clientInfluxDB.close()
-        if readerCountry is not None: readerCountry.close()
-        if readerCity is not None: readerCity.close()
-        if sock is not None: sock.close()
+        if clientInfluxDB is not None:
+            clientInfluxDB.close()
+        if readerCountry is not None:
+            readerCountry.close()
+        if readerCity is not None:
+            readerCity.close()
+        if sock is not None:
+            sock.close()
         print(f"{datetime.now()}: nf2InfluxDB1: Program execution ended.")
 
 
